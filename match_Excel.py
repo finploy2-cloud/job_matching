@@ -7,20 +7,26 @@ from getpass import getpass  # Not needed for Excel, but keeping structure
 # =============================================================================
 
 # File paths
-JOBS_FILE = r'D:\FINPLOY\Matching codes\matching_betwen_Excel_file\job_id_active.xlsx'      # Your jobs Excel file
-CANDIDATES_FILE = r'D:\FINPLOY\Matching codes\matching_betwen_Excel_file\linup.xlsx'         # Your candidates Excel file
-OUTPUT_DIR = r'D:\FINPLOY\Matching codes\matching_betwen_Excel_file\matchfiles'
+JOBS_FILE = r'D:\matching_betwen_Excel_file\23-09-2025 MASTER FILE LOCATIONS_290930.xlsx'      # Your jobs Excel file
+CANDIDATES_FILE = r'D:\matching_betwen_Excel_file\screening_naukri.xlsx'         # Your candidates Excel file
+OUTPUT_DIR = r'D:\matching_betwen_Excel_file\matchfiles'
 
 # COLUMN NAMES - UPDATE THESE TO MATCH YOUR EXCEL FILES!
 JOBS_COLUMNS = {
     'job_id_col': 'job_id',           # Column name for job ID in jobs.xlsx
-    'composite_key_col': 'composit_key'  # Column name for composite key in jobs.xlsx
+    'composite_key_col': 'composit_key',  # Column name for composite key in jobs.xlsx
+    'date_col': 'Date',               # Column name for date in jobs.xlsx
+    'company_col': 'Company',         # Column name for company in jobs.xlsx
+    'designation_col': 'Designation', # Column name for designation in jobs.xlsx
+    'location_col': 'Client location',       # Column name for location in jobs.xlsx
+    'hr_name_col': 'HR Name'          # Column name for HR name in jobs.xlsx
 }
 
 CANDIDATES_COLUMNS = {
     'candidate_id_col': 'candidate_id',   # Column name for candidate ID in candidates.xlsx
     'composite_key_col': 'composit_key'   # Column name for composite key in candidates.xlsx
 }
+
 
 # =============================================================================
 def load_excel_data():
@@ -106,7 +112,8 @@ def find_matching_candidates_for_all_jobs(jobs_df, candidates_df):
                         'job_key': job_key,
                         'target_salary': target_salary,  # From composite_key
                         'matches': match_df,
-                        'count': len(match_df)
+                        'count': len(match_df),
+                        'job_row': job_row
                     }
                     print(f"✅ Found {len(match_df)} matching candidates for Job {job_id}")
                 else:
@@ -115,7 +122,8 @@ def find_matching_candidates_for_all_jobs(jobs_df, candidates_df):
                         'job_key': job_key,
                         'target_salary': target_salary,
                         'matches': pd.DataFrame(),
-                        'count': 0
+                        'count': 0,
+                        'job_row': job_row
                     }
             else:
                 print(f"❌ No candidates found for prefix '{prefix}' (Job {job_id})")
@@ -125,7 +133,8 @@ def find_matching_candidates_for_all_jobs(jobs_df, candidates_df):
                     'job_key': job_key,
                     'target_salary': target_salary,
                     'matches': pd.DataFrame(),
-                    'count': 0
+                    'count': 0,
+                    'job_row': job_row
                 }
                 
         except ValueError as e:
@@ -149,15 +158,23 @@ def export_to_single_excel(results):
     
     for job_id, data in results.items():
         match_df = data['matches']
+        job_row = data['job_row']
         
         if not match_df.empty:
-            # Add job_id column to the matches DataFrame
+            # Add job columns
             match_df_with_job = match_df.copy()
-            match_df_with_job[JOBS_COLUMNS['job_id_col']] = job_id  # Add job_id column at the beginning or end; adjust position if needed
+            match_df_with_job['job_id'] = job_id
+            match_df_with_job['job_date'] = job_row[JOBS_COLUMNS['date_col']]
+            match_df_with_job['job_composit_key'] = job_row[JOBS_COLUMNS['composite_key_col']]
+            match_df_with_job['job_company'] = job_row[JOBS_COLUMNS['company_col']]
+            match_df_with_job['job_designation'] = job_row[JOBS_COLUMNS['designation_col']]
+            match_df_with_job['job_location'] = job_row[JOBS_COLUMNS['location_col']]
+            match_df_with_job['job_hr_name'] = job_row[JOBS_COLUMNS['hr_name_col']]
             
-            # Move job_id to first column for better readability
-            cols = [JOBS_COLUMNS['job_id_col']] + [col for col in match_df_with_job.columns if col != JOBS_COLUMNS['job_id_col']]
-            match_df_with_job = match_df_with_job[cols]
+            # Reorder columns: job_id first, then candidate columns, then other job columns
+            candidate_cols = [col for col in match_df_with_job.columns if col not in ['job_id', 'job_date', 'job_composit_key', 'job_company', 'job_designation', 'job_location', 'job_hr_name']]
+            other_job_cols = ['job_date', 'job_composit_key', 'job_company', 'job_designation', 'job_location', 'job_hr_name']
+            match_df_with_job = match_df_with_job[['job_id'] + candidate_cols + other_job_cols]
             
             all_matches_dfs.append(match_df_with_job)
             total_matches += len(match_df)
@@ -167,7 +184,7 @@ def export_to_single_excel(results):
             match_df_with_job['extracted_salary'] = match_df_with_job[CANDIDATES_COLUMNS['composite_key_col']].apply(
                 lambda x: parse_composite_key(x)[1] if pd.notna(x) else None
             )
-            preview_cols = [JOBS_COLUMNS['job_id_col'], CANDIDATES_COLUMNS['candidate_id_col'], CANDIDATES_COLUMNS['composite_key_col'], 'extracted_salary']
+            preview_cols = ['job_id', CANDIDATES_COLUMNS['candidate_id_col'], CANDIDATES_COLUMNS['composite_key_col'], 'extracted_salary', 'job_composit_key', 'job_company', 'job_designation']
             print(match_df_with_job[preview_cols].head().to_string(index=False))
         else:
             print(f"📝 Job {job_id}: No matches (skipping)")
